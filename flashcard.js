@@ -2,9 +2,12 @@ var BasicCard = require("./BasicCard.js");
 var ClozeCard = require("./ClozeCard.js");
 var inquirer = require("inquirer");
 var fs = require("fs");
+//The following three arrays are sort of placeholders.
 var basicFlashcards = [];
 var clozeFlashcards = [];
 var allFlashcards = [];
+//This array will be used to study all the flashcards.
+var parsedAllFlashcards = [];
 var ranNum = 0;
 var usedNumbers = [];
 var questionCount = 0;
@@ -25,11 +28,25 @@ ClozeCard.prototype.checkCloze = function() {
 //I made these flashcards in case the user doesn't make any but wants to study.
 var questionOne = new ClozeCard("Abraham Lincoln wrote the Emancipation Proclamation.", "Abraham Lincoln");
 var questionTwo = new ClozeCard("Facebook owes its existence to Myspace.", "Myspace");
-var questionThree = new BasicCard("Who was the eight President of the United Sates of America?", "Martin Van Buren");
+var questionThree = new BasicCard("Who was the eighth President of the United Sates of America?", "Martin Van Buren");
 var questionFour = new BasicCard("Who was the first unanimous NBA MVP?", "Stephen Curry");
 
-clozeFlashcards.push(questionOne, questionTwo);
 basicFlashcards.push(questionThree, questionFour);
+clozeFlashcards.push(questionOne, questionTwo);
+
+for (var i = 0; i < basicFlashcards.length; i++) {
+		allFlashcards.push(JSON.stringify(basicFlashcards[i]));
+	}
+
+for (var i = 0; i < clozeFlashcards.length; i++) {
+	//It might seem odd that I'm transforming my cloze cards into basic cards, but this will help with running the study application.
+	var simplifiedClozeObject = new BasicCard(clozeFlashcards[i].partial, clozeFlashcards[i].cloze);
+	allFlashcards.push(JSON.stringify(simplifiedClozeObject));
+}
+
+//I'm resetting these arrays back to empty arrays so that if the user wants to study just her/his basic or cloze cards, she/he won't have to use my dummy cards.
+basicFlashcards = [];
+clozeFlashcards = [];
 
 function getUserInput() {
 	inquirer.prompt([
@@ -89,77 +106,87 @@ function makeClozeCard() {
 }
 
 function study() {
-	for (var i = 0; i < basicFlashcards.length; i++) {
-		fs.appendFile("your_flashcards.json", JSON.stringify(basicFlashcards[i]), function(err) {
-			if (err) console.log(err);
-		});
+	if (basicFlashcards.length > 0) {
+		for (var i = 0; i < basicFlashcards.length; i++) {
+			allFlashcards.push(JSON.stringify(basicFlashcards[i]));
+		}
 	}
 
-	//This is just so the user can have a record of their basic flashcards. The file -- "your_questions.txt" -- will be created in their folder where this application runs.
-	// for (var i = 0; i < basicFlashcards.length; i++) {
-	// 	fs.appendFile("your_questions.txt", "Front: " + basicFlashcards[i].front + "\nBack: " + basicFlashcards[i].back + "\n\n", function(err) {
-	// 		if (err) console.log(err);
-	// 	});
-	// }
-	// //ditto, but with cloze flashcards.
-	// for (var i = 0; i < clozeFlashcards.length; i++) {
-	// 	fs.appendFile("your_questions.txt", "Front: " + clozeFlashcards[i].partial + "\nBack: " + clozeFlashcards[i].cloze + "\n\n", function(err) {
-	// 		if (err) console.log(err);
-	// 	});
-	// }
+	if (clozeFlashcards.length > 0) {
+		for (var i = 0; i < clozeFlashcards.length; i++) {
+			var simplifiedClozeObject = new BasicCard(clozeFlashcards[i].partial, clozeFlashcards[i].cloze);
+			allFlashcards.push(JSON.stringify(simplifiedClozeObject));
+		}
+	}
 
-	//I didn't yet devise a way to study all the flashcards at once; thus, I give the user the option to study the basic flashcards or the cloze flashcards.
-	//Ideally, I would figure out a way to enable the user to study both at once. I ran into difficulties accomplishing that, though, because their constructors are different, and, thus, so too are their key names.
-	//I think it would be nice to figure out a way to store them as objects in a file and then read the file and produce the flashcards from it. That way the user could 'save' their flashcards to the app. Something for the future...
+	fs.writeFile("your_questions.json", "[" + allFlashcards + "]", function(err) {
+		if (err) console.log(err);
+	});
+
+	fs.readFile("your_questions.json", "utf8", function(err, data) {
+		if (err) {
+			console.log(err);
+		} else {
+			parsedAllFlashcards = JSON.parse(data);
+		}
+	});
+
 	inquirer.prompt([
 		{
 			type: "list",
 			message: "What flashcards to you want to study?",
-			choices: ["Basic Flashcards", "Cloze Flashcards"],
+			//I decided to give the user a few options. Maybe she/he would like to test out their recently created cards before studying all their cards.
+			choices: ["All my flashcards!", "Your new basic flashcards.", "Your new cloze flashcards."],
 			name: "cardChoice"
 		}
 	]).then(function(user) {
-		if (user.cardChoice === "Basic Flashcards") {
+		if (user.cardChoice === "Your new basic flashcards.") {
 			questionCount = basicFlashcards.length;
 			usedNumbers = [];
 			correct = 0;
 			incorrect = 0;
 			basicStudy();
-		} else {
+		} else if (user.cardChoice === "Your new cloze flashcards.") {
 			questionCount = clozeFlashcards.length;
 			usedNumbers = [];
 			correct = 0;
 			incorrect = 0;
 			clozeStudy();
+		} else {
+			questionCount = parsedAllFlashcards.length;
+			usedNumbers = [];
+			correct = 0;
+			incorrect = 0;
+			allStudy();
 		}
 	});
 }
 
-function basicStudy() {
+function allStudy() {
 	if (questionCount !== 0) {
-		ranNum = Math.floor(Math.random() * basicFlashcards.length);
+		ranNum = Math.floor(Math.random() * parsedAllFlashcards.length);
 
 		if (usedNumbers.indexOf(ranNum) !== -1) {
-			basicStudy();
+			allStudy();
 		} else {
 			usedNumbers.push(ranNum);
 			inquirer.prompt([
 				{
 					type: "input",
-					message: basicFlashcards[ranNum].front,
+					message: parsedAllFlashcards[ranNum].front,
 					name: "answer"
 				}
 			]).then(function(user) {
-				if (user.answer === basicFlashcards[ranNum].back) {
+				if (user.answer === parsedAllFlashcards[ranNum].back || user.answer === parsedAllFlashcards[ranNum].back.toLowerCase()) {
 					console.log("Correct!");
 					correct++;
 					questionCount--;
-					basicStudy();
+					allStudy();
 				} else {
-					console.log("Incorrect! The correct answer is: " + basicFlashcards[ranNum].back);
+					console.log("Incorrect! The correct answer is: " + parsedAllFlashcards[ranNum].back);
 					incorrect++;
 					questionCount--;
-					basicStudy();
+					allStudy();
 				}
 			});
 		}
@@ -169,11 +196,17 @@ function basicStudy() {
 			{
 				type: "list",
 				message: "You've gone through all your basic flashcards. You got " + correct + " correct and " + incorrect + " incorrect answer(s). What would you like to do next?",
-				choices: ["Study the cloze flashcards", "Make more flashcards", "Stop studying"],
+				choices: ["Study your new basic flashcards", "Study your new cloze flashcards", "Make more flashcards", "Stop studying"],
 				name: "userChoice"
 			}
 		]).then(function(user) {
-			if (user.userChoice === "Study the cloze flashcards") {
+			if (user.userChoice === "Study your new basic flashcards") {
+				questionCount = basicFlashcards.length;
+				usedNumbers = [];
+				correct = 0;
+				incorrect = 0;
+				basicStudy();
+			} else if (user.userChoice === "Study your new cloze flashcards") {
 				questionCount = clozeFlashcards.length;
 				usedNumbers = [];
 				correct = 0;
@@ -188,56 +221,135 @@ function basicStudy() {
 	}
 }
 
-function clozeStudy() {
-	if (questionCount !== 0) {
-		ranNum = Math.floor(Math.random() * clozeFlashcards.length);
+function basicStudy() {
+	if (!basicFlashcards.length) {
+		console.log("You haven't created any new basic cards, or you've already studied your new basic cards. Try making more then studying them.");
+		setTimeout(getUserInput, 2000);
+	} else {
 
-		if (usedNumbers.indexOf(ranNum) !== -1) {
-			clozeStudy();
+		if (questionCount !== 0) {
+			ranNum = Math.floor(Math.random() * basicFlashcards.length);
+
+			if (usedNumbers.indexOf(ranNum) !== -1) {
+				basicStudy();
+			} else {
+				usedNumbers.push(ranNum);
+				inquirer.prompt([
+					{
+						type: "input",
+						message: basicFlashcards[ranNum].front,
+						name: "answer"
+					}
+				]).then(function(user) {
+					if (user.answer === basicFlashcards[ranNum].back || user.answer === basicFlashcards[ranNum].back.toLowerCase()) {
+						console.log("Correct!");
+						correct++;
+						questionCount--;
+						basicStudy();
+					} else {
+						console.log("Incorrect! The correct answer is: " + basicFlashcards[ranNum].back);
+						incorrect++;
+						questionCount--;
+						basicStudy();
+					}
+				});
+			}
+
 		} else {
-			usedNumbers.push(ranNum);
 			inquirer.prompt([
 				{
-					type: "input",
-					message: clozeFlashcards[ranNum].partial,
-					name: "answer"
+					type: "list",
+					message: "You've gone through all your basic flashcards. You got " + correct + " correct and " + incorrect + " incorrect answer(s). What would you like to do next?",
+					choices: ["Study your new cloze flashcards", "Study all your flashcards", "Make more flashcards", "Stop studying"],
+					name: "userChoice"
 				}
 			]).then(function(user) {
-				if (user.answer === clozeFlashcards[ranNum].cloze) {
-					console.log("Correct!");
-					correct++;
-					questionCount--;
+				basicFlashcards = [];
+				if (user.userChoice === "Study your new cloze flashcards") {
+					questionCount = clozeFlashcards.length;
+					usedNumbers = [];
+					correct = 0;
+					incorrect = 0;
 					clozeStudy();
+				} else if (user.userChoice === "Study all your flashcards") {
+					questionCount = parsedAllFlashcards.length;
+					usedNumbers = [];
+					correct = 0;
+					incorrect = 0;
+					allStudy();
+				} else if (user.userChoice === "Make more flashcards") {
+					getUserInput();
 				} else {
-					console.log("Incorrect! The correct answer is: " + clozeFlashcards[ranNum].cloze);
-					incorrect++;
-					questionCount--;
-					clozeStudy();
+					console.log("Thanks for studying!");
 				}
 			});
 		}
+	}
+}
 
+function clozeStudy() {
+	if (!clozeFlashcards.length) {
+		console.log("You haven't created any new cloze cards, or you've already studied your new cloze cards. Try making more then studying them.");
+		setTimeout(getUserInput, 2000);
 	} else {
-		inquirer.prompt([
-			{
-				type: "list",
-				message: "You've gone through all your basic flashcards. You got " + correct + " correct and " + incorrect + " incorrect answer(s). What would you like to do next?",
-				choices: ["Study the basic flashcards", "Make more flashcards", "Stop studying"],
-				name: "userChoice"
-			}
-		]).then(function(user) {
-			if (user.userChoice === "Study the basic flashcards") {
-				questionCount = basicFlashcards.length;
-				usedNumbers = [];
-				correct = 0;
-				incorrect = 0;
-				basicStudy();
-			} else if (user.userChoice === "Make more flashcards") {
-				getUserInput();
+
+		if (questionCount !== 0) {
+			ranNum = Math.floor(Math.random() * clozeFlashcards.length);
+
+			if (usedNumbers.indexOf(ranNum) !== -1) {
+				clozeStudy();
 			} else {
-				console.log("Thanks for studying!");
+				usedNumbers.push(ranNum);
+				inquirer.prompt([
+					{
+						type: "input",
+						message: clozeFlashcards[ranNum].partial,
+						name: "answer"
+					}
+				]).then(function(user) {
+					if (user.answer === clozeFlashcards[ranNum].cloze || user.answer === clozeFlashcards[ranNum].cloze.toLowerCase()) {
+						console.log("Correct!");
+						correct++;
+						questionCount--;
+						clozeStudy();
+					} else {
+						console.log("Incorrect! The correct answer is: " + clozeFlashcards[ranNum].cloze);
+						incorrect++;
+						questionCount--;
+						clozeStudy();
+					}
+				});
 			}
-		});
+
+		} else {
+			clozeFlashcards = [];
+			inquirer.prompt([
+				{
+					type: "list",
+					message: "You've gone through all your basic flashcards. You got " + correct + " correct and " + incorrect + " incorrect answer(s). What would you like to do next?",
+					choices: ["Study your new basic flashcards", "Study all your flashcards", "Make more flashcards", "Stop studying"],
+					name: "userChoice"
+				}
+			]).then(function(user) {
+				if (user.userChoice === "Study your new basic flashcards") {
+					questionCount = basicFlashcards.length;
+					usedNumbers = [];
+					correct = 0;
+					incorrect = 0;
+					basicStudy();
+				} else if (user.userChoice === "Study all your flashcards") {
+					questionCount = parsedAllFlashcards.length;
+					usedNumbers = [];
+					correct = 0;
+					incorrect = 0;
+					allStudy();
+				} else if (user.userChoice === "Make more flashcards") {
+					getUserInput();
+				} else {
+					console.log("Thanks for studying!");
+				}
+			});
+		}
 	}
 }
 
